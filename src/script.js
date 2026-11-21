@@ -35,6 +35,7 @@ const treeLoader = new GLTFLoader();
 let globe;
 let treeTemplate;
 let hasSpawnedTree = false;
+const MAX_VERTEX_PICK_ATTEMPTS = 80;
 
 const upAxis = new THREE.Vector3(0, 1, 0);
 
@@ -52,6 +53,8 @@ const getFirstMeshWithGeometry = (root) => {
 const spawnTreeOnGlobeVertex = () => {
   if (hasSpawnedTree || !globe || !treeTemplate) {
     console.log("Cannot spawn tree: globe or tree template not ready.");
+    console.log("Globe:", globe);
+    console.log("Tree template:", treeTemplate);
     return;
   }
 
@@ -66,33 +69,59 @@ const spawnTreeOnGlobeVertex = () => {
     return;
   }
 
-  const randomVertexIndex = Math.floor(Math.random() * positionAttribute.count);
-  const localVertex = new THREE.Vector3().fromBufferAttribute(positionAttribute, randomVertexIndex);
-  const localNormal = normalAttribute
-    ? new THREE.Vector3().fromBufferAttribute(normalAttribute, randomVertexIndex).normalize()
-    : localVertex.clone().normalize();
-
   globe.updateMatrixWorld(true);
+  const cameraWorldPosition = camera.getWorldPosition(new THREE.Vector3());
+  let worldVertex;
+  let worldNormal;
 
-  const worldVertex = localVertex.applyMatrix4(globeMesh.matrixWorld);
-  const worldNormal = localNormal.transformDirection(globeMesh.matrixWorld).normalize();
+  for (let attempt = 0; attempt < MAX_VERTEX_PICK_ATTEMPTS; attempt++) {
+    const randomVertexIndex = Math.floor(Math.random() * positionAttribute.count);
+    const localVertex = new THREE.Vector3().fromBufferAttribute(positionAttribute, randomVertexIndex);
+    const localNormal = normalAttribute
+      ? new THREE.Vector3().fromBufferAttribute(normalAttribute, randomVertexIndex).normalize()
+      : localVertex.clone().normalize();
+
+    const candidateWorldVertex = localVertex.applyMatrix4(globeMesh.matrixWorld);
+    const candidateWorldNormal = localNormal.transformDirection(globeMesh.matrixWorld).normalize();
+    const toCamera = cameraWorldPosition.clone().sub(candidateWorldVertex).normalize();
+
+    worldVertex = candidateWorldVertex;
+    worldNormal = candidateWorldNormal;
+
+    if (candidateWorldNormal.dot(toCamera) > 0) {
+      break;
+    }
+  }
+
+  if (!worldVertex || !worldNormal) {
+    return;
+  }
 
   const tree = treeTemplate.clone(true);
   tree.position.copy(worldVertex);
   tree.position.addScaledVector(worldNormal, 0.03);
+  // Align tree with the surface normal
+  //flip tree on its y-axis if needed
+ 
+    // tree.rotateX(Math.PI*1.5);
+  
   tree.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(upAxis, worldNormal));
-  tree.scale.setScalar(0.001);
+  tree.scale.setScalar(0.0001);
+  
   scene.add(tree);
 
   gsap.to(tree.scale, {
     duration: 0.7,
-    x: 1,
-    y: 1,
-    z: 1,
+    x: .3,
+    y: .3,
+    z: .3,
     ease: "back.out(2.5)",
   });
 
   hasSpawnedTree = true;
+  setTimeout(() => {
+    hasSpawnedTree = false;
+  }, 500); // Reset after 1 second (adjust as needed)
 };
 
 globeLoader.load("./models/globe.glb", (gltf) => {
