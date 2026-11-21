@@ -14,3 +14,7 @@ npm run dev
 # Build for production in the dist/ directory
 npm run build
 ```
+
+## Interaction
+- Scroll with your mouse wheel to spawn the tree.
+- The tree pops onto a random globe vertex and aligns to that vertex normal.
