@@ -8,6 +8,8 @@ const canvas = document.querySelector("canvas.webgl");
 
 // Scene
 const scene = new THREE.Scene();
+const globeGroup = new THREE.Group();
+scene.add(globeGroup);
 
 // Object
 
@@ -36,6 +38,7 @@ let globe;
 let treeTemplate;
 let hasSpawnedTree = false;
 const MAX_VERTEX_PICK_ATTEMPTS = 80;
+const GLOBE_ROTATION_SPEED = 0.2;
 
 const upAxis = new THREE.Vector3(0, 1, 0);
 
@@ -98,17 +101,20 @@ const spawnTreeOnGlobeVertex = () => {
   }
 
   const tree = treeTemplate.clone(true);
-  tree.position.copy(worldVertex);
-  tree.position.addScaledVector(worldNormal, 0.03);
-  // Align tree with the surface normal
-  //flip tree on its y-axis if needed
- 
-    // tree.rotateX(Math.PI*1.5);
-  
-  tree.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(upAxis, worldNormal));
+  const localTreePosition = globeGroup.worldToLocal(
+    worldVertex.clone().addScaledVector(worldNormal, 0.03)
+  );
+  const localTreeNormal = worldNormal
+    .clone()
+    .transformDirection(new THREE.Matrix4().copy(globeGroup.matrixWorld).invert())
+    .normalize();
+
+  tree.position.copy(localTreePosition);
+  tree.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(upAxis, localTreeNormal));
   tree.scale.setScalar(0.0001);
   
-  scene.add(tree);
+  // add it to the same group as the globe
+  globeGroup.add(tree);
 
   gsap.to(tree.scale, {
     duration: 0.7,
@@ -127,7 +133,7 @@ const spawnTreeOnGlobeVertex = () => {
 globeLoader.load("./models/globe.glb", (gltf) => {
   console.log("Globe loading...");
   globe = gltf.scene;
-  scene.add(globe);
+  globeGroup.add(globe);
   console.log("Globe loaded");
   console.log(globe);
   console.log(globe.position)
@@ -190,6 +196,7 @@ const clock = new THREE.Clock();
 const tick = () => {
   // Clock
   const elapsedTime = clock.getElapsedTime();
+  globeGroup.rotation.y = elapsedTime * GLOBE_ROTATION_SPEED;
 
   // Update objects
   // One rotation per second
